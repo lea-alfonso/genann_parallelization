@@ -52,6 +52,7 @@ double genann_act_output_indirect(const struct genann *ann, double a) {
 
 const double sigmoid_dom_min = -15.0;
 const double sigmoid_dom_max = 15.0;
+const double linear_dom_abs_max = 1000;
 double interval;
 double lookup[LOOKUP_SIZE];
 
@@ -101,6 +102,15 @@ double genann_act_linear(const struct genann *ann unused, double a) {
     return a;
 }
 
+double genann_act_linear_restricted(const genann *ann unused, double a) {
+    if (a > linear_dom_abs_max) {
+        return linear_dom_abs_max;
+    } else if (a < -linear_dom_abs_max) {
+        return -linear_dom_abs_max;
+    }
+    return a;
+}
+
 double genann_act_threshold(const struct genann *ann unused, double a) {
     return a > 0;
 }
@@ -138,8 +148,8 @@ genann *genann_init(int inputs, int hidden_layers, int hidden, int outputs) {
 
     genann_randomize(ret);
 
-    ret->activation_hidden = genann_act_sigmoid_cached;
-    ret->activation_output = genann_act_sigmoid_cached;
+    ret->activation_hidden = genann_act_linear_restricted;
+    ret->activation_output = genann_act_linear_restricted;
 
     genann_init_sigmoid_lookup(ret);
 
@@ -296,7 +306,8 @@ void genann_train(genann const *ann, double const *inputs, double const *desired
             }
         } else {
             for (j = 0; j < ann->outputs; ++j) {
-                *d++ = (*t - *o) * *o * (1.0 - *o);
+                // printf("Delta error :  %1.f. ",(*t - *o));
+                *d++ = (*t - *o) ;
                 ++o; ++t;
             }
         }
@@ -328,7 +339,8 @@ void genann_train(genann const *ann, double const *inputs, double const *desired
                 delta += forward_delta * forward_weight;
             }
 
-            *d = *o * (1.0-*o) * delta;
+            // *d = *o * (1.0-*o) * delta;
+            *d++ = delta ;
             ++d; ++o;
         }
     }
