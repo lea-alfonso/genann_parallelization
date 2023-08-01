@@ -105,8 +105,8 @@ double genann_act_linear(const struct genann *ann unused, double a) {
 double genann_act_linear_restricted(const genann *ann unused, double a) {
     if (a > linear_dom_abs_max) {
         return linear_dom_abs_max;
-    } else if (a < -linear_dom_abs_max) {
-        return -linear_dom_abs_max;
+    } else if (a < 0) {
+        return 0;
     }
     return a;
 }
@@ -149,9 +149,9 @@ genann *genann_init(int inputs, int hidden_layers, int hidden, int outputs) {
     genann_randomize(ret);
 
     ret->activation_hidden = genann_act_linear_restricted;
-    ret->activation_output = genann_act_linear_restricted;
+    ret->activation_output = genann_act_linear;
 
-    genann_init_sigmoid_lookup(ret);
+    // genann_init_sigmoid_lookup(ret);
 
     return ret;
 }
@@ -208,7 +208,9 @@ void genann_randomize(genann *ann) {
         double r = GENANN_RANDOM();
         /* Sets weights from -0.5 to 0.5. */
         ann->weight[i] = r - 0.5;
+        printf(" %f",ann->weight[i]);
     }
+    printf("\n");
 }
 
 
@@ -284,7 +286,6 @@ double const *genann_run(genann const *ann, double const *inputs) {
     return ret;
 }
 
-
 void genann_train(genann const *ann, double const *inputs, double const *desired_outputs, double learning_rate) {
     /* To begin with, we must run the network forward. */
     genann_run(ann, inputs);
@@ -302,12 +303,15 @@ void genann_train(genann const *ann, double const *inputs, double const *desired
         if (genann_act_output == genann_act_linear ||
                 ann->activation_output == genann_act_linear) {
             for (j = 0; j < ann->outputs; ++j) {
+                printf("Iter output :  %f. ", *o);
+                printf("Delta error :  %f. \n",(*t - *o));
                 *d++ = *t++ - *o++;
             }
         } else {
             for (j = 0; j < ann->outputs; ++j) {
-                // printf("Delta error :  %1.f. ",(*t - *o));
-                *d++ = (*t - *o) ;
+                printf("Iter output :  %1.f. ", *o);
+                printf("Delta error :  %1.f. \n",(*t - *o));
+                *d++ = (*t - *o)  ;
                 ++o; ++t;
             }
         }
@@ -340,7 +344,8 @@ void genann_train(genann const *ann, double const *inputs, double const *desired
             }
 
             // *d = *o * (1.0-*o) * delta;
-            *d++ = delta ;
+            *d =  delta;
+            // printf("Delta %d,%d :  %1.f. \n",h,j,*d);
             ++d; ++o;
         }
     }
@@ -401,6 +406,16 @@ void genann_train(genann const *ann, double const *inputs, double const *desired
         }
 
     }
+    // {
+    //     int i;
+    //     for (i = 0; i < ann->total_weights; ++i) {
+    //         double r = GENANN_RANDOM();
+    //         /* Sets weights from -0.5 to 0.5. */
+    //         ann->weight[i] = r - 0.5;
+    //         printf(" %f",ann->weight[i]);
+    //     }
+    //     printf("\n");
+    // }
 
 }
 
