@@ -208,7 +208,7 @@ void genann_randomize(genann *ann) {
         double r = GENANN_RANDOM();
         /* Sets weights from -0.5 to 0.5. */
         ann->weight[i] = r - 0.5;
-        printf(" %f",ann->weight[i]);
+        // printf(" %f",ann->weight[i]);
     }
     printf("\n");
 }
@@ -303,14 +303,14 @@ void genann_train(genann const *ann, double const *inputs, double const *desired
         if (genann_act_output == genann_act_linear ||
                 ann->activation_output == genann_act_linear) {
             for (j = 0; j < ann->outputs; ++j) {
-                printf("Iter output :  %f. ", *o);
-                printf("Delta error :  %f. \n",(*t - *o));
+                // printf("Iter output :  %f. ", *o);
+                // printf("Delta error :  %f. \n",(*t - *o));
                 *d++ = *t++ - *o++;
             }
         } else {
             for (j = 0; j < ann->outputs; ++j) {
-                printf("Iter output :  %1.f. ", *o);
-                printf("Delta error :  %1.f. \n",(*t - *o));
+                // printf("Iter output :  %1.f. ", *o);
+                // printf("Delta error :  %1.f. \n",(*t - *o));
                 *d++ = (*t - *o)  ;
                 ++o; ++t;
             }
