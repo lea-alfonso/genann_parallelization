@@ -27,9 +27,9 @@ example4: example4.o genann.o
 
 sensor: sensor.o genann.o
 
-node: node.o genann.o
-
 small_sensor: small_sensor.o genann.o
+
+node: node.o genann.o
 
 
 clean:
