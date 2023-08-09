@@ -3,6 +3,7 @@
 #include <time.h>
 #include <string.h>
 #include <math.h>
+#include <pthread.h>
 #include "genann.h"
 
 /* This example is to illustrate how to use GENANN.
@@ -10,8 +11,17 @@
  */
 
 // const char *class_names[] = {"Iris-setosa", "Iris-versicolor", "Iris-virginica"};
+int nodes = 7;
+int number_of_cores = 1;
+int loops = 500;
+double train_test_percentage = 0.80;
+double accepted_relative_error = 0.20;
+double* general_input;
+unsigned long samples;
+int train_test_index ;
+double* results;
 
-int load_data(double **ref_general_input,int nodes) {
+void load_data() {
     FILE *in = fopen("example/training_data_0.csv", "r");
     if (!in) {
         printf("Could not open file\n");
@@ -20,7 +30,7 @@ int load_data(double **ref_general_input,int nodes) {
 
     /* Loop through the data to get a count. */
     char line[1024];
-    unsigned long samples = 0;
+    samples = 0;
     while (!feof(in) && fgets(line, 1024, in)) {
         ++samples;
     }
@@ -28,7 +38,7 @@ int load_data(double **ref_general_input,int nodes) {
     printf("Loading %ld data points \n", samples);
 
     /* Allocate memory for input*/
-    *ref_general_input = malloc(sizeof(double) * samples * (5 + nodes));
+    general_input = malloc(sizeof(double) * samples * (5 + nodes));
 
     /* Allocate memory for min and max values of each feature for normalization*/
     double min_values[5+nodes];
@@ -42,7 +52,7 @@ int load_data(double **ref_general_input,int nodes) {
     unsigned int i;
     int j;
     for (i = 0; i < samples; ++i) {
-        double *p = *ref_general_input + i * (5 + nodes);
+        double *p = general_input + i * (5 + nodes);
         
         if (fgets(line, 1024, in) == NULL) {
             perror("fgets");
@@ -69,7 +79,7 @@ int load_data(double **ref_general_input,int nodes) {
     
      // Normalize the input data using min-max normalization
     for (i = 0; i < samples; ++i) {
-        double *p = *ref_general_input + i * (5 + nodes);
+        double *p = general_input + i * (5 + nodes);
         for (j = 0; j < (5+nodes); ++j) {
             if (max_values[j] == min_values[j]) {
                 p[j] = 0;  
@@ -78,13 +88,13 @@ int load_data(double **ref_general_input,int nodes) {
             }
         }
     }
-    return samples;
 }
 
-void reorganize_data(double **input,int samples, int nodes,int node_index,double **node_input,double **node_output) {
+
+void reorganize_data(int node_index,double **node_input,double **node_output) {
 
     for (int i = 0; i < samples; ++i) {
-        double *gral_index = *input + (i * (5 + nodes));
+        double *gral_index = general_input + (i * (5 + nodes));
         double *input_index = *node_input + (i * (5 + nodes-1));
         double *output_index = *node_output + i;
         
@@ -100,7 +110,7 @@ void reorganize_data(double **input,int samples, int nodes,int node_index,double
     }
 }
 
-void shuffle_data(double *input, double *class, int samples) {
+void shuffle_data(double *input, double *class) {
     double temp;
     for (int i = samples - 1; i > 0; --i) {
         int j = rand() % (i + 1);
@@ -118,76 +128,78 @@ void shuffle_data(double *input, double *class, int samples) {
         }
     }
 }
+void *thread_function(void *arg) {
+    int i = *(int *)arg;
+    printf("Starting thread %d\n",i);
+    int j,k,l;
+    double *node_input = malloc(sizeof(double) * samples * (5 + nodes - 1));
+    double *node_output = malloc(sizeof(double) * samples);
+    reorganize_data(i,&node_input,&node_output);
+
+    
+    //We create the NN 
+    genann *ann = genann_init(5 + nodes - 1, 1, 45, 1);
+
+    //Train
+    for (j = 0; j < loops; ++j) {
+        for (k = 0; k < train_test_index; ++k) {
+            genann_train(ann, node_input + k*(5 + (nodes - 1)), node_output + k, .01);
+        }
+    }
+
+    //Test
+    int correct = 0;
+    for (l = train_test_index; l < samples; ++l) {
+        if (fabs(node_output[l] - *genann_run(ann,node_input + l*(5 + (nodes - 1))) ) < (node_output[l]* accepted_relative_error) ) {
+            ++correct;
+        }
+    }
+    results[i] = (double)correct / (samples - train_test_index) * 100.0;
+
+    char filename[100];  // You need to allocate enough space for the filename
+
+    // Format the integer value into a string and concatenate it with the filename
+    sprintf(filename, "output/node_%d.ann", i);
+    FILE *file = fopen(filename, "w");
+
+    if (file == NULL) {
+        printf("Error opening the file.\n");
+        pthread_exit(NULL);
+    }
+    genann_write(ann,file);
+    fclose(file);
+
+    free(node_input);
+    free(node_output);
+    genann_free(ann);
+
+    printf("Thread %d finished!\n",i);
+    pthread_exit(NULL);
+}
 
 int main(int argc, char *argv[]) {
-    int nodes = 7;
-    int number_of_cores = 1;
-    int loops = 500;
-    double train_test_percentage = 0.80;
-    double accepted_relative_error = 0.20;
-    double* general_input;
-    int samples = load_data(&general_input,nodes);
-
-    int train_test_index = samples * train_test_percentage;
-    double results[nodes];
-    int i,j,k,l;
+    int i;
+    load_data();
+    train_test_index = samples * train_test_percentage;
+    results = malloc(sizeof(double) * nodes);
+    pthread_t threads[nodes]; // Array to store thread IDs
+    int thread_args[nodes]; // Array to store thread-specific arguments
 
     for(i=0; i < nodes;++i) {
-
-        /* We create mem space for the input and output of each node*/
-        double *node_input = malloc(sizeof(double) * samples * (5 + nodes-1));
-        double *node_output = malloc(sizeof(double) * samples );
-
-        //First we need to remove the feature we're trying to predict from the input and move them to the output
-        reorganize_data(&general_input,samples,nodes,i,&node_input,&node_output);
-
-        // for (j=0; j < 1 ; ++j) {
-        //     double *node_index = node_input +(j * (5+nodes -1));
-        //     for (k = 0; k < (5+nodes-1); ++k) {
-        //         printf("%f, ",node_index[k]);
-        //     }
-        //     printf("%f\n",node_output[j]);
-
-        // }
-
-        //We create the NN 
-        genann *ann = genann_init(5 + nodes - 1, 1, 45, 1);
-
-        //Train
-        for (j = 0; j < loops; ++j) {
-            for (k = 0; k < train_test_index; ++k) {
-                genann_train(ann, node_input + k*(5 + (nodes - 1)), node_output + k, .01);
-            }
-            printf("Loop %d \n",j);
-        }
-
-        //Test
-        int correct = 0;
-        for (l = train_test_index; l < samples; ++l) {
-            if (fabs(node_output[l] - *genann_run(ann,node_input + l*(5 + (nodes - 1))) ) < (node_output[l]* accepted_relative_error) ) {
-                ++correct;
-            }
-        }
-        results[i] = (double)correct / (samples - train_test_index) * 100.0;
-        printf("%d/%d correct (%0.1f%%).\n", correct, samples - train_test_index, (double)correct / (samples - train_test_index) * 100.0);
-
-        char filename[100];  // You need to allocate enough space for the filename
-
-        // Format the integer value into a string and concatenate it with the filename
-        sprintf(filename, "output/node_%d.ann", i);
-        FILE *file = fopen(filename, "w");
-
-        if (file == NULL) {
-            printf("Error opening the file.\n");
+        thread_args[i] = i;
+        // Create thread
+        if (pthread_create(&threads[i], NULL, thread_function, &thread_args[i]) != 0) {
+            fprintf(stderr, "Error creating thread %d\n", i);
             return 1;
         }
-        genann_write(ann,file);
-        fclose(file);
-
-        free(node_input);
-        free(node_output);
-        genann_free(ann);
     }
-    free(general_input);
+    // Wait for all threads to finish
+    for (i = 0; i < nodes; ++i) {
+        pthread_join(threads[i], NULL);
+    }
+    printf("All threads finished!\nResults are:\n");
+    for (i = 0; i< nodes; ++i) {
+        printf("\t Thread %d: (%0.1f%%) accuracy\n",i,results[i]);
+    }
     return 0;
 }
