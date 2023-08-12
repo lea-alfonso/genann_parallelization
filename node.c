@@ -14,11 +14,11 @@
  */
 
 // const char *class_names[] = {"Iris-setosa", "Iris-versicolor", "Iris-virginica"};
-int nodes = 7;
+int nodes = 19;
 int num_cores;
 int num_threads;
 int problems_per_thread;
-int loops = 500;
+int loops = 750;
 double train_test_percentage = 0.80;
 double accepted_relative_error = 0.20;
 double* general_input;
@@ -30,7 +30,7 @@ double* thread_times;
 int* problem_trained_in_thread;
 
 void load_data() {
-    FILE *in = fopen("example/training_data_0.csv", "r");
+    FILE *in = fopen("example/training_data.csv", "r");
     if (!in) {
         printf("Could not open file\n");
         exit(1);
@@ -189,6 +189,8 @@ void *thread_function(void *arg) {
         if (file == NULL) {
             printf("Error opening the file.\n");
             pthread_exit(NULL);
+        } else {
+            printf("Problem %d done in %0.1f.\n", problem_number, train_times[problem_number]);
         }
         genann_write(ann,file);
         fclose(file);
