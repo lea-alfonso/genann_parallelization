@@ -29,6 +29,14 @@ double* train_times;
 double* thread_times;
 int* problem_trained_in_thread;
 
+
+/*
+load_data() is used to load data from a CSV file, count the number of data points, 
+allocate memory for the input data, and normalize the input data using min-max normalization.
+
+The normalized input data is stored in the general_input array, which can be used for further 
+processing or training a machine learning model.
+*/
 void load_data() {
     FILE *in = fopen("example/training_data.csv", "r");
     if (!in) {
@@ -98,6 +106,15 @@ void load_data() {
     }
 }
 
+/*
+the reorganize_data function separates the input features and the target output value from 
+the general_input array and stores them in separate arrays (node_input and node_output,
+respectively) for a specific node (node_index) in the neural network.
+ 
+This reorganization is necessary because the general_input array contains all the input features
+and target outputs for all nodes, while the training process might require separate input and
+output arrays for each node.
+*/
 void reorganize_data(int node_index,double **node_input,double **node_output) {
 
     for (int i = 0; i < samples; ++i) {
@@ -136,6 +153,26 @@ void shuffle_data(double *input, double *class) {
     }
 }
 
+
+/*
+This function is executed by each thread created in the main program. It performs the following tasks:
+a. Determines the range of problems (nodes) to be trained by the current thread based on the total number of nodes,
+ the number of threads, and the thread index (i).
+b. Allocates memory for the input and output arrays for each problem (node) and reorganizes the data from general_input
+ into separate input and output arrays using the reorganize_data function.
+c. For each problem assigned to the current thread:
+
+Initializes a neural network using the genann_init function.
+Trains the neural network using the genann_train function for a specified number of loops (loops) and a portion of the
+ data (train_test_index).
+Measures the training time.
+Tests the trained neural network on the remaining data (samples - train_test_index) and calculates the accuracy.
+Saves the trained neural network to a file with the format "output/node_<problem_number>.ann".
+Frees the memory allocated for the input, output, and neural network.
+
+d. Measures the total execution time for the current thread.
+e. Exits the thread using pthread_exit.
+*/
 void *thread_function(void *arg) {
     int i = *(int *)arg;
     struct timeval startThread, endThread;
@@ -207,6 +244,23 @@ void *thread_function(void *arg) {
     pthread_exit(NULL);
 }
 
+/*
+This is the main function in this script. It:
+a. Loads the data from a file using the load_data function.
+b. Determines the number of threads to create based on the number of available cores (num_cores) and the number of
+ nodes (nodes).
+c. Allocates memory for storing the results, problem assignments, training times, and thread times.
+d. Prints information about the number of available cores and the number of threads to be created.
+e. Creates the specified number of threads using pthread_create and passes the thread index (i) as an argument to
+ the thread_function.
+f. Waits for all threads to finish using pthread_join.
+g. Measures the total execution time for all threads.
+h. Prints the results, including the accuracy, training time, and execution time for each problem and thread.
+i. Frees the allocated memory and exits the program.
+The code is designed to train multiple neural networks (one for each node) in parallel using multiple threads.
+ Each thread is responsible for training a subset of the nodes, and the results are saved to separate files.
+  The program takes advantage of multithreading to improve the overall training performance.
+*/
 int main(int argc, char *argv[]) {
     int i;
     load_data();
